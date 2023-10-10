@@ -1,0 +1,11 @@
+[Vv]olume/[Dd]ata/
+[Vv]olume/[Ii]mages/
+[Vv]olume/[Rr]osbag2_2022_11_09-15_21_22/
+#[Vv]olume/[Dd]ata/
+
+
+# Visual Studio cache directory
+.vs/
+
+Images
+UIElementsSchema
