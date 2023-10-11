@@ -144,7 +144,7 @@ class ImgProcessing(Node):
         #FALTA EL PLOT 3D
 
         '''Matriz Homográfica'''
-        H, mask = cv.findHomography(points_left, points_right, cv.RANSAC,5.0)
+        H, mask = cv.findHomography(points_left, points_right, cv.RANSAC,3.0)
         # La máscara es un vector de 1's y 0's que dicen qué puntos fueron filtrados y cuáles no. Hay que aplicar esa máscara a los vectores de puntos 2d y 3d
         #print(mask)
         #print(mask.shape)
@@ -195,12 +195,30 @@ class ImgProcessing(Node):
         _, E, R, t, _ = cv.recoverPose(points1=points_left_inliers, points2=points_right_inliers, cameraMatrix1=self.K_left, distCoeffs1=self.dist_coeff_left, 
                                         cameraMatrix2=self.K_right, distCoeffs2=self.dist_coeff_right, E=E, R=R, t=t, method=cv.RANSAC)
 
-        self.t_left.append(t.reshape((3,1)))
-        self.R_left.append(R)
-        
         plotCameraPoses(np.eye(3), np.zeros((3,1)), R,  t.reshape((3, 1)), self.count)
 
+        '''Estimación trayectoria cámara left'''
+        if self.count == 0:
+            self.t_left.append(np.zeros((3,1)))
+            self.R_left.append(np.eye(3))
+        else:
+            H, mask = cv.findHomography(points_left, points_right, cv.RANSAC,5.0)
+            # La máscara es un vector de 1's y 0's que dicen qué puntos fueron filtrados y cuáles no. Hay que aplicar esa máscara a los vectores de puntos 2d y 3d
+            #print(mask)
+            #print(mask.shape)
+            inlier_mask = mask.ravel() == 1
+            points_left_inliers = points_left[inlier_mask]
+            points_right_inliers = points_right[inlier_mask]
+            E, _ = cv.findEssentialMat(points1=points_left_inliers, points2=points_right_inliers, cameraMatrix1=self.K_left, distCoeffs1=self.dist_coeff_left, 
+                        cameraMatrix2=self.K_right, distCoeffs2=self.dist_coeff_right)
+            # E, R y t se le dan a cv.RecoverPose como estimaciones iniciales, y después la función devuelve los valores finales estimados.
+            _, E, R, t, _ = cv.recoverPose(points1=points_left_inliers, points2=points_right_inliers, cameraMatrix1=self.K_left, distCoeffs1=self.dist_coeff_left, 
+                                            cameraMatrix2=self.K_right, distCoeffs2=self.dist_coeff_right, E=E, R=R, t=t, method=cv.RANSAC)
+    
+        
+        
         self.count += 1
+
         return
 
 
