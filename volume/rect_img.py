@@ -5,11 +5,14 @@ from rclpy.node import Node
 import numpy as np
 import cv2 as cv
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from cv_bridge import CvBridge
 from PIL import Image
-
+from camera_pose_visualizer import CameraPoseVisualizer
 from sensor_msgs.msg import Image
 import yaml
+
+
 
 def ReadYaml(yaml_file_path):
     with open(yaml_file_path, 'r') as stream:
@@ -35,12 +38,12 @@ def ReadYaml(yaml_file_path):
         matrix_K.append(row)
 
     distortion_coefficients = data['distortion_coefficients']
-    dist_coff = []
+    dist_coeff = np.empty((1, 5), dtype=np.float64)
     distortion_coefficients_data = np.array(distortion_coefficients['data'])
-    for i in distortion_coefficients_data:
-        dist_coff.append(i)
+    for i, coeff in enumerate(distortion_coefficients_data):
+        dist_coeff[0,i] = coeff
 
-    return np.array(matrix_P), np.array(matrix_K), np.array(dist_coff)
+    return np.array(matrix_P), np.array(matrix_K), dist_coeff
 
 
 def plotHomogeneousImage(H, points_original, points_other_camera, img, count, side):
@@ -55,6 +58,22 @@ def plotHomogeneousImage(H, points_original, points_other_camera, img, count, si
         center_coordinates = (round(point[0]), round(point[1]))
         img_rgb = cv.circle(img_rgb, center_coordinates, 5, (0, 255, 0))  # Red color (BGR), -1 for filled circle
     cv.imwrite(f"images/homography_{side}_{count}.png", img_rgb)
+    return
+
+def plotCameraPoses(R1, t1, R2, t2, count):
+
+    # # Aplicamos la transformación relativa para obtener la pose de la segunda cámara
+    # R2 = np.dot(R2, R1)  # Combinamos las rotaciones
+    # t2 = t2 + np.dot(R1, t2)  # Combinamos las traslaciones
+    
+    visualizer = CameraPoseVisualizer([-5, 5], [-5, 5], [-5, 5])
+    P1 = np.vstack((np.hstack((R1,t1)), np.array([0,0,0,1])))
+    visualizer.extrinsic2pyramid(P1, 'c', 1)
+    P2 = np.vstack((np.hstack((R2,t2)), np.array([0,0,0,1])))
+    visualizer.extrinsic2pyramid(P2, 'r', 1)
+    # Guardar plot
+    plt.savefig(f"images/poses_dos_camaras_{count}.png")
+    plt.close()
     return
 
 
@@ -79,6 +98,9 @@ class ImgProcessing(Node):
         self.bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True) 
         self.count = 0
         self.br = CvBridge() # Para convertir de mensaje de imagen de ROS a imagen de opencv
+
+        self.t_left = []
+        self.R_left = []
         
     
     def callback(self, left_msg, right_msg):
@@ -144,7 +166,7 @@ class ImgProcessing(Node):
         disparity_map = stereo.compute(img_left, img_right)
         min_disp = disparity_map.min()
         max_disp = disparity_map.max()
-        disparity_map = (disparity_map - min_disp) / (max_disp - min_disp)
+        disparity_map = ((disparity_map - min_disp) / (max_disp - min_disp)).astype(np.float32)
 
         # Convert the normalized disparity map to a color image (optional)
         disparity_map_colored = cv.applyColorMap((disparity_map * 255).astype(np.uint8), cv.COLORMAP_JET)
@@ -155,10 +177,28 @@ class ImgProcessing(Node):
         #             -> P[0:3,3] = K t -> t = inv(K) P[0:3,3]
         R = np.dot(np.linalg.inv(self.K_right), self.proj_right[0:3,0:3])
         t = np.dot(np.linalg.inv(self.K_right), self.proj_right[0:3,3])
-        R1, R2, P1, P2, Q = cv.stereoRectify(self.K_left, self.dist_coeff_left, self.K_right, self.dist_coeff_right,img_left.shape,R,t) 
-        #camera_matrix1, distCoeffs1, camera_matrix2, distCoeffs2, R, T 
-        reprojection = cv.reprojectImageTo3D(disparity_map_colored, Q)
-        cv.imwrite(f"images/reprojection_{self.count}.png", reprojection)
+
+        R1, R2, P1, P2, Q, _, _ = cv.stereoRectify(self.K_left, self.dist_coeff_left, self.K_right, self.dist_coeff_right,img_left.shape,R,t) 
+        #camera_matrix1, distCoeffs1, camera_matrix2, distCoeffs2, img, R, T 
+        reprojection = cv.reprojectImageTo3D(disparity_map, Q)
+        #cv.imwrite(f"images/reprojection_{self.count}.png", reprojection)
+        
+        # FALTA EL PLOT 3D
+
+
+        '''Estimación de pose'''
+        # Como las matrices de las camaras no son exactamente iguales, como asume findEssentialMat, necesitamos compensar la distorsión.
+        # En nuestro caso las imágenes ya están rectificadas, por lo que esta compensación ya está hecha???
+        E, _ = cv.findEssentialMat(points1=points_left_inliers, points2=points_right_inliers, cameraMatrix1=self.K_left, distCoeffs1=self.dist_coeff_left, 
+                       cameraMatrix2=self.K_right, distCoeffs2=self.dist_coeff_right)
+        # E, R y t se le dan a cv.RecoverPose como estimaciones iniciales, y después la función devuelve los valores finales estimados.
+        _, E, R, t, _ = cv.recoverPose(points1=points_left_inliers, points2=points_right_inliers, cameraMatrix1=self.K_left, distCoeffs1=self.dist_coeff_left, 
+                                        cameraMatrix2=self.K_right, distCoeffs2=self.dist_coeff_right, E=E, R=R, t=t, method=cv.RANSAC)
+
+        self.t_left.append(t.reshape((3,1)))
+        self.R_left.append(R)
+        
+        plotCameraPoses(np.eye(3), np.zeros((3,1)), R,  t.reshape((3, 1)), self.count)
 
         self.count += 1
         return
