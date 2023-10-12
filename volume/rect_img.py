@@ -113,6 +113,9 @@ class ImgProcessing(Node):
         
         self.orb = cv.ORB_create()
         self.bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True) 
+        self.bf12 = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+        self.bf23 = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+
         self.count = 0
         self.br = CvBridge() # Para convertir de mensaje de imagen de ROS a imagen de opencv
         
@@ -224,6 +227,19 @@ class ImgProcessing(Node):
             # Compute matches between images
             matches = self.bf.match(des_left, des_left_prev) 
             matches = sorted(matches, key = lambda x:x.distance)
+
+            ###############################################################################################################
+            '''Matcheo de a 3 imágenes (corrección que hay que terminar)'''
+            matches12 = self.bf12.match(des_left, des_right)
+            matches23 = self.bf23.match(des_right, des_left_next)
+
+            # Extract the indices of keypoints that are common in both matches
+            common_keypoint_indices = set(match.queryIdx for match in matches12).intersection(set(match.trainIdx for match in matches23))
+
+            # Create a list of common matches
+            common_matches = [matches12[match_idx] for match_idx in common_keypoint_indices]
+            ###############################################################################################################
+
 
             img_matches = cv.drawMatches(img_left,keypoints_left,self.img_left_prev,keypoints_left_prev,matches[:],outImg=None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
             #cv.imwrite(f"images/matches_entre_frames_{self.count}.png", img_matches)
