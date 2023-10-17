@@ -15,7 +15,9 @@ class CameraPoseVisualizer:
         self.ax.set_xlabel('x')
         self.ax.set_ylabel('y')
         self.ax.set_zlabel('z')
-        print('initialize camera pose visualizer')
+        self.verts = None
+        self.faces = None
+        #print('initialize camera pose visualizer')
 
     def extrinsic2pyramid(self, extrinsic, color='r', focal_len_scaled=5, aspect_ratio=0.3):
         vertex_std = np.array([[0, 0, 0, 1],
@@ -24,13 +26,18 @@ class CameraPoseVisualizer:
                                [-focal_len_scaled * aspect_ratio, focal_len_scaled * aspect_ratio, focal_len_scaled, 1],
                                [-focal_len_scaled * aspect_ratio, -focal_len_scaled * aspect_ratio, focal_len_scaled, 1]])
         vertex_transformed = vertex_std @ extrinsic.T
-        meshes = [[vertex_transformed[0, :-1], vertex_transformed[1][:-1], vertex_transformed[2, :-1]],
-                            [vertex_transformed[0, :-1], vertex_transformed[2, :-1], vertex_transformed[3, :-1]],
-                            [vertex_transformed[0, :-1], vertex_transformed[3, :-1], vertex_transformed[4, :-1]],
-                            [vertex_transformed[0, :-1], vertex_transformed[4, :-1], vertex_transformed[1, :-1]],
-                            [vertex_transformed[1, :-1], vertex_transformed[2, :-1], vertex_transformed[3, :-1], vertex_transformed[4, :-1]]]
-        self.ax.add_collection3d(
-            Poly3DCollection(meshes, facecolors=color, linewidths=0.3, edgecolors=color, alpha=0.35))
+        
+        meshes = [[vertex_transformed[0, :-1], vertex_transformed[1, :-1], vertex_transformed[2, :-1]],
+                  [vertex_transformed[0, :-1], vertex_transformed[2, :-1], vertex_transformed[3, :-1]],
+                  [vertex_transformed[0, :-1], vertex_transformed[3, :-1], vertex_transformed[4, :-1]],
+                  [vertex_transformed[0, :-1], vertex_transformed[4, :-1], vertex_transformed[1, :-1]],
+                  [vertex_transformed[1, :-1], vertex_transformed[2, :-1], vertex_transformed[3, :-1], vertex_transformed[4, :-1]]]
+
+        self.faces = [[0,1,2], [0,2,3], [0,3,4], [0,4,1], [1,2,3], [1,3,4]]
+
+        self.verts = vertex_transformed[:,:-1]
+
+        self.ax.add_collection3d(Poly3DCollection(meshes, facecolors=color, linewidths=0.3, edgecolors=color, alpha=0.35))
 
     def customize_legend(self, list_label):
         list_handle = []
