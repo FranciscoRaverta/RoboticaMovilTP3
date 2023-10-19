@@ -61,6 +61,14 @@ def plotHomogeneousImage(H, points_original, points_other_camera, img, count, si
     cv.imwrite(f"images/homography/{side}_{count}.png", img_rgb)
     return
 
+def plotKeypointsImage(keypoints, img, side, count):
+    img_rgb = cv.cvtColor(img,cv.COLOR_GRAY2RGB)
+    for point in keypoints:
+        center_coordinates = (round(point.pt[0]), round(point.pt[1]))
+        img_rgb = cv.circle(img_rgb, center_coordinates, 5, (0, 0, 255))  # Red color (BGR), -1 for filled circle
+    cv.imwrite(f"images/keypoints/{count}_{side}.png", img_rgb)
+    return
+
 def plotCameraPoses(R1, t1, R2, t2, count):
 
     # # Aplicamos la transformación relativa para obtener la pose de la segunda cámara
@@ -142,6 +150,9 @@ class ImgProcessing(Node):
         # compute the descriptors with ORB
         keypoints_right, des_right = self.orb.compute(img_right, keypoints_right)
 
+        plotKeypointsImage(keypoints_left, img_left, "left", self.count)
+        plotKeypointsImage(keypoints_right, img_right, "right", self.count)
+
         # Compute matches between images
         matches = self.bf.match(des_left, des_right) 
         matches = sorted(matches, key = lambda x:x.distance)
@@ -151,7 +162,7 @@ class ImgProcessing(Node):
 
         img_matches = cv.drawMatches(img_left,keypoints_left,img_right,keypoints_right,matches[:30],outImg=None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
         cv.imwrite(f"images/30matches/{self.count}.png", img_matches)
-
+        
 
         ''' Triangulation '''
         # Convert keypoints to numpy arrays of pixel coordinates
